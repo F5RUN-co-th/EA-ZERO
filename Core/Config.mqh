@@ -40,6 +40,29 @@ input double InpDojiMaxBodyRatio             = 0.1;  // body/range <= this => Do
 input double InpMarubozuMinBodyRatio         = 0.9;  // body/range >= this => Marubozu
 input double InpHammerMinShadowRatio         = 2.0;  // long shadow must be >= body * this, for Hammer/Shooting Star
 input double InpHammerMaxOppositeShadowRatio = 0.25; // opposite shadow must be <= body * this, for Hammer/Shooting Star
+input double InpTweezerTolerance             = 0.1;  // max high/low difference, as a fraction of avg candle range
+input double InpStarMaxBodyRatio             = 0.5;  // middle "star" body must be <= this fraction of either outer candle's body
+input double InpSoldiersMaxShadowRatio       = 0.3;  // max shadow (in the trend direction) as a fraction of body, for Soldiers/Crows
+
+input group "=== Pattern Weights (used by Classification/PatternClassifier.mqh) ==="
+input double InpWeightHammer             = 1.0;
+input double InpWeightShootingStar       = 1.0;
+input double InpWeightDoji               = 0.5;
+input double InpWeightSpinningTop        = 0.5;
+input double InpWeightBullishMarubozu    = 1.0;
+input double InpWeightBearishMarubozu    = 1.0;
+input double InpWeightBullishEngulfing   = 1.5;
+input double InpWeightBearishEngulfing   = 1.5;
+input double InpWeightHaramiBull         = 1.0;
+input double InpWeightHaramiBear         = 1.0;
+input double InpWeightPiercingLine       = 1.5;
+input double InpWeightDarkCloud          = 1.5;
+input double InpWeightTweezerTop         = 1.0;
+input double InpWeightTweezerBottom      = 1.0;
+input double InpWeightMorningStar        = 2.0;
+input double InpWeightEveningStar        = 2.0;
+input double InpWeightThreeWhiteSoldiers = 2.0;
+input double InpWeightThreeBlackCrows    = 2.0;
 
 //+------------------------------------------------------------------+
 //| Combines base magic number with config version so trade history / |

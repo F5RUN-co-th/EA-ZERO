@@ -36,11 +36,13 @@
 #include "Utils/CandleUtils.mqh"
 #include "Data/MarketData.mqh"
 #include "Pattern/PatternDetector.mqh"
+#include "Classification/PatternClassifier.mqh"
 
-CLogger          g_logger("PatternEA");
-CMarketData      g_marketData(_Symbol, _Period, InpATRPeriod);
-CPatternDetector g_detector;
-datetime         g_lastBarTime = 0;
+CLogger            g_logger("PatternEA");
+CMarketData        g_marketData(_Symbol, _Period, InpATRPeriod);
+CPatternDetector   g_detector;
+CPatternClassifier g_classifier;
+datetime           g_lastBarTime = 0;
 
 //+------------------------------------------------------------------+
 //| Returns true exactly once per new closed bar.                     |
@@ -141,8 +143,14 @@ void OnTick()
          signals[i].bullishScore, signals[i].bearishScore, signals[i].neutralScore));
    }
 
-   //--- 7-11. Score -> Decision -> Risk -> Trade -> State (next batches) ---
-   // TODO (Classification/PatternClassifier.mqh):  classifier.Score(signals, bull, bear, neutral);
+   //--- 7. Classification (now real) ---
+   double bullishScore, bearishScore, neutralScore;
+   g_classifier.Score(signals, bullishScore, bearishScore, neutralScore);
+
+   g_logger.Debug(StringFormat("Classifier scores | bull=%.2f bear=%.2f neutral=%.2f",
+                                bullishScore, bearishScore, neutralScore));
+
+   //--- 8-11. Decision -> Risk -> Trade -> State (next batches) ---
    // TODO (Strategy/DecisionEngine.mqh):            direction = decisionEngine.Decide(bull, bear, neutral);
    // TODO (Risk/RiskManager.mqh):                   riskManager.Validate(direction, stateMachine.CurrentState());
    // TODO (Trade/TradeManager.mqh):                 tradeManager.Execute(direction, lot, sl, tp);

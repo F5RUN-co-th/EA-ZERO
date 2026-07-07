@@ -9,6 +9,7 @@
 #include "../Core/Interfaces.mqh"
 #include "SinglePattern.mqh"
 #include "DoublePattern.mqh"
+#include "TriplePattern.mqh"
 
 class CPatternDetector : public IPatternDetector
 {
@@ -43,21 +44,30 @@ public:
 
          PatternSignal s;
 
-         if(CDoublePattern::DetectBullishEngulfing(prev, curr, s))
-         {
-            s.barShift = i;
-            Append(signals, s);
-         }
-
-         if(CDoublePattern::DetectBearishEngulfing(prev, curr, s))
-         {
-            s.barShift = i;
-            Append(signals, s);
-         }
+         if(CDoublePattern::DetectBullishEngulfing(prev, curr, s)) { s.barShift = i; Append(signals, s); }
+         if(CDoublePattern::DetectBearishEngulfing(prev, curr, s)) { s.barShift = i; Append(signals, s); }
+         if(CDoublePattern::DetectBullishHarami(prev, curr, s))    { s.barShift = i; Append(signals, s); }
+         if(CDoublePattern::DetectBearishHarami(prev, curr, s))    { s.barShift = i; Append(signals, s); }
+         if(CDoublePattern::DetectPiercingLine(prev, curr, s))     { s.barShift = i; Append(signals, s); }
+         if(CDoublePattern::DetectDarkCloudCover(prev, curr, s))   { s.barShift = i; Append(signals, s); }
+         if(CDoublePattern::DetectTweezerTop(prev, curr, s))       { s.barShift = i; Append(signals, s); }
+         if(CDoublePattern::DetectTweezerBottom(prev, curr, s))    { s.barShift = i; Append(signals, s); }
       }
 
-      // TODO (Batch 3): Triple-candle shapes (Morning/Evening Star, Three Soldiers/Crows)
-      //                 loop i from 1 to total-2, using rates[i], rates[i+1], rates[i+2]
+      //--- Triple-candle shapes: c3 = rates[i] (newest), c2 = rates[i+1], c1 = rates[i+2] (oldest)
+      for(int i = 1; i < total - 2; i++)
+      {
+         MqlRates c3 = rates[i];
+         MqlRates c2 = rates[i + 1];
+         MqlRates c1 = rates[i + 2];
+
+         PatternSignal s;
+
+         if(CTriplePattern::DetectMorningStar(c1, c2, c3, s))         { s.barShift = i; Append(signals, s); }
+         if(CTriplePattern::DetectEveningStar(c1, c2, c3, s))         { s.barShift = i; Append(signals, s); }
+         if(CTriplePattern::DetectThreeWhiteSoldiers(c1, c2, c3, s))  { s.barShift = i; Append(signals, s); }
+         if(CTriplePattern::DetectThreeBlackCrows(c1, c2, c3, s))     { s.barShift = i; Append(signals, s); }
+      }
    }
 
 private:
