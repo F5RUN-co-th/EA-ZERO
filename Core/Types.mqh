@@ -91,4 +91,22 @@ enum SystemState
    STATE_COOLDOWN,
    STATE_RECOVERY
 };
+
+//+------------------------------------------------------------------+
+//| Tunable geometry thresholds used by Single/Double/TriplePattern.  |
+//| Passed in explicitly (not read from global inputs) so the Pattern |
+//| layer stays testable with fixed literals and independent from    |
+//| Core/Config.mqh - see Tests/Test_PatternDetector.mq5.             |
+//+------------------------------------------------------------------+
+struct PatternThresholds
+{
+   double dojiBodyRatio;           // body/range <= this            => doji-shaped
+   double marubozuBodyRatio;       // body/range >= this            => marubozu-shaped
+   double spinningTopMaxBodyRatio; // body/range <= this            => spinning-top/star-shaped
+   double hammerShadowRatio;       // long shadow >= this * body    => hammer/star-shaped
+   double smallShadowMaxRatio;     // opposite shadow <= this * body to still count as hammer/star-shaped
+   int    trendLookback;           // bars back to look for simple trend context (Hammer vs Hanging Man, etc.)
+   double tweezerToleranceRatio;   // max relative diff between highs/lows to count as "equal" (Tweezer)
+   double soldiersMinBodyRatio;    // min body/range for a candle to count in 3-Soldiers/3-Crows
+};
 //+------------------------------------------------------------------+

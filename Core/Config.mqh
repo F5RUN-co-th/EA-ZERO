@@ -6,6 +6,8 @@
 //+------------------------------------------------------------------+
 #property strict
 
+#include "Types.mqh"
+
 input group "=== General ==="
 input int  InpConfigVersion   = 1;         // Config/strategy version - traced via Magic Number + trade comments
 input long InpBaseMagicNumber = 20260700;  // Base magic number (version is appended, see GetMagicNumber())
@@ -29,6 +31,15 @@ input int  InpMaxOpenPositions = 1;    // Max concurrent open positions for this
 
 input group "=== Emergency ==="
 input bool InpEnableEmergencyStop = true; // Master kill-switch check, evaluated every tick
+
+input group "=== Market Data ==="
+input int InpATRPeriod = 14; // ATR period used for normalizing pattern thresholds and SL distance
+
+input group "=== Pattern Thresholds ==="
+input double InpDojiMaxBodyRatio             = 0.1;  // body/range <= this => Doji
+input double InpMarubozuMinBodyRatio         = 0.9;  // body/range >= this => Marubozu
+input double InpHammerMinShadowRatio         = 2.0;  // long shadow must be >= body * this, for Hammer/Shooting Star
+input double InpHammerMaxOppositeShadowRatio = 0.25; // opposite shadow must be <= body * this, for Hammer/Shooting Star
 
 //+------------------------------------------------------------------+
 //| Combines base magic number with config version so trade history / |

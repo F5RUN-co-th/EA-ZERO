@@ -34,9 +34,13 @@
 #include "Core/Config.mqh"
 #include "Core/Logger.mqh"
 #include "Utils/CandleUtils.mqh"
+#include "Data/MarketData.mqh"
+#include "Pattern/PatternDetector.mqh"
 
-CLogger  g_logger("PatternEA");
-datetime g_lastBarTime = 0;
+CLogger          g_logger("PatternEA");
+CMarketData      g_marketData(_Symbol, _Period, InpATRPeriod);
+CPatternDetector g_detector;
+datetime         g_lastBarTime = 0;
 
 //+------------------------------------------------------------------+
 //| Returns true exactly once per new closed bar.                     |
@@ -104,28 +108,40 @@ void OnTick()
    //--- 3. Cheap tick-level checks before touching price history ---
    // TODO (Risk/ExecutionFilter.mqh): if(!executionFilter.TickCheck()) return;
 
-   //--- 4. Load market data ---
-   MqlRates rates[];
-   ArraySetAsSeries(rates, true);
-   int copied = CopyRates(_Symbol, _Period, 0, 50, rates);
-
-   if(copied <= 0)
+   //--- 4. Load market data (via wrapper, never CopyRates() directly) ---
+   if(!g_marketData.LoadFromChart(50))
    {
-      g_logger.Warn("CopyRates failed, skipping this bar");
+      g_logger.Warn("MarketData.LoadFromChart failed, skipping this bar");
       return;
    }
 
-   //--- 5. Market-level checks (needs price history, e.g. ATR) ---
-   // TODO (Risk/ExecutionFilter.mqh): if(!executionFilter.MarketCheck(rates)) return;
+   MqlRates rates[];
+   g_marketData.GetRates(rates);
 
-   //--- Sanity check on the foundation: CandleUtils working on real data ---
+   //--- 5. Market-level checks (needs price history, e.g. ATR) ---
+   double atr = g_marketData.GetATR();
+   // TODO (Risk/ExecutionFilter.mqh): if(!executionFilter.MarketCheck(rates, atr)) return;
+
+   //--- Sanity check on the foundation: CandleUtils + MarketData working on real data ---
    double lastBody = CCandleUtils::BodySize(rates[1]);
    bool   lastBull = CCandleUtils::IsBullish(rates[1]);
-   g_logger.Debug(StringFormat("Last closed bar | body=%.5f | bullish=%s",
-                                lastBody, lastBull ? "true" : "false"));
+   g_logger.Debug(StringFormat("Last closed bar | body=%.5f | bullish=%s | ATR=%.5f",
+                                lastBody, lastBull ? "true" : "false", atr));
 
-   //--- 6-11. Pattern -> Score -> Decision -> Risk -> Trade -> State ---
-   // TODO (Pattern/PatternDetector.mqh):           detector.Scan(rates, signals);
+   //--- 6. Pattern detection (now real) ---
+   PatternSignal signals[];
+   g_detector.Scan(rates, signals);
+
+   g_logger.Debug(StringFormat("Pattern scan found %d signal(s)", ArraySize(signals)));
+   for(int i = 0; i < ArraySize(signals); i++)
+   {
+      g_logger.Debug(StringFormat(
+         "  -> shift=%d type=%s confidence=%.2f bull=%.2f bear=%.2f neutral=%.2f",
+         signals[i].barShift, EnumToString(signals[i].type), signals[i].confidence,
+         signals[i].bullishScore, signals[i].bearishScore, signals[i].neutralScore));
+   }
+
+   //--- 7-11. Score -> Decision -> Risk -> Trade -> State (next batches) ---
    // TODO (Classification/PatternClassifier.mqh):  classifier.Score(signals, bull, bear, neutral);
    // TODO (Strategy/DecisionEngine.mqh):            direction = decisionEngine.Decide(bull, bear, neutral);
    // TODO (Risk/RiskManager.mqh):                   riskManager.Validate(direction, stateMachine.CurrentState());
