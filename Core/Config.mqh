@@ -13,11 +13,12 @@ input int  InpConfigVersion   = 1;         // Config/strategy version - traced v
 input long InpBaseMagicNumber = 20260700;  // Base magic number (version is appended, see GetMagicNumber())
 
 input group "=== Risk ==="
-input double InpRiskPercent           = 1.0;  // % of equity risked per trade (used if InpFixedLot == 0)
-input double InpFixedLot              = 0.0;  // Fixed lot size, 0 = use InpRiskPercent instead
-input double InpStopLossATRMultiplier = 1.5;  // SL distance = ATR * this multiplier
-input double InpTakeProfitRR          = 2.0;  // TP distance = SL distance * this R:R ratio
-input int    InpCooldownBars          = 3;    // Bars to stay in COOLDOWN state after a closed trade
+input double InpRiskPercent            = 1.0;  // % of equity risked per trade (used if InpFixedLot == 0)
+input double InpFixedLot               = 0.0;  // Fixed lot size, 0 = use InpRiskPercent instead
+input double InpStopLossATRMultiplier  = 1.5;  // SL distance = ATR * this multiplier
+input double InpTakeProfitRR           = 2.0;  // TP distance = SL distance * this R:R ratio
+input int    InpCooldownBars           = 3;    // Bars to stay in COOLDOWN state after a closed trade
+input double InpRecoveryLotMultiplier  = 0.5;  // Lot size is multiplied by this while SystemState == RECOVERY
 
 input group "=== Execution Filter ==="
 input double InpMaxSpreadPoints  = 30;    // Reject new trades if spread exceeds this (points)
@@ -34,7 +35,8 @@ input double InpMinScoreThreshold = 1.0; // A direction's score must reach at le
 input double InpDominanceRatio    = 1.2; // A direction must beat the opposite score by this ratio to win (avoids close calls)
 
 input group "=== Emergency ==="
-input bool InpEnableEmergencyStop = true; // Master kill-switch check, evaluated every tick
+input bool   InpEnableEmergencyStop         = true;  // Master kill-switch check, evaluated every tick
+input double InpEmergencyMaxDrawdownPercent = 20.0;  // Close everything if equity drawdown from peak reaches this %
 
 input group "=== Market Data ==="
 input int InpATRPeriod = 14; // ATR period used for normalizing pattern thresholds and SL distance

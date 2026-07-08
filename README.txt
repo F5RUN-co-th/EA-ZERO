@@ -253,3 +253,87 @@ WHAT'S NEXT (Phase 1, batch 5)
 - Trade/TradeManager.mqh (implements ITradeExecutor)
 - This is the batch where the EA opens its first real trade - test on a
   demo account only.
+
+
+PHASE 1 - BATCH 5 (Risk + Trade) - EA NOW OPENS REAL ORDERS
+================================================================
+
+*** TEST THIS BATCH ON A DEMO ACCOUNT ONLY ***
+Everything before this batch only computed numbers and logged them.
+As of this batch, EA.mq5 calls CTradeManager.OpenBuy()/OpenSell(), which
+sends real orders to whatever account the EA is attached to. Attach to
+a demo chart first. Do not attach to a live account until you've watched
+it trade correctly on demo for a while.
+
+NEW FILES
+-----------
+Risk/ExecutionFilter.mqh <- CheckSpread/CheckSession/TickCheck/MarketCheck.
+                            Same "caller passes in terminal values" pattern
+                            as StateMachine - spread and hour are read by
+                            EA.mq5 and passed in, so the filter logic
+                            itself is unit-testable.
+Risk/TradeLock.mqh       <- Blocked(barTime, openPositionsCount). The
+                            one-trade-per-bar check is structurally
+                            redundant given the current IsNewBar() gating
+                            (documented in the file) but kept as cheap
+                            defense-in-depth. The max-open-positions check
+                            is NOT redundant - it's what actually stops a
+                            second entry while IN_TRADE.
+Risk/EmergencyStop.mqh   <- Tracks peak equity since EA start, triggers
+                            when drawdown from that peak reaches
+                            InpEmergencyMaxDrawdownPercent (default 20%).
+                            Checked every tick, before anything else.
+Risk/RiskManager.mqh     <- SL/TP distance from ATR, lot sizing from
+                            risk %, RECOVERY-aware (multiplies lot by
+                            InpRecoveryLotMultiplier). Validate() is the
+                            single entry point EA.mq5 calls - it also
+                            vetoes the trade if ATR isn't ready yet.
+Trade/TradeManager.mqh   <- implements ITradeExecutor using MT5's
+                            standard CTrade class. The only module that
+                            actually sends orders. NOT unit-tested (can't
+                            be, without a live/demo connection) - verify
+                            this one on a demo chart instead.
+Tests/Test_ExecutionFilter.mq5
+Tests/Test_TradeLock.mq5
+Tests/Test_EmergencyStop.mq5
+Tests/Test_RiskManager.mq5
+   (4 new test scripts - all pure logic, no broker connection needed)
+
+CHANGED FILES
+---------------
+Core/Config.mqh <- ADDED InpRecoveryLotMultiplier (Risk group) and
+                   InpEmergencyMaxDrawdownPercent (Emergency group).
+                   Nothing removed/renamed.
+EA.mq5          <- Full pipeline now wired: Emergency check (step 0),
+                   TradeLock + StateMachine guards (steps 1-2),
+                   ExecutionFilter tick/market checks (steps 3+5),
+                   RiskManager.Validate() (step 9), and
+                   TradeManager.OpenBuy()/OpenSell() (step 10). Every
+                   TODO from the original flow comment is now [DONE].
+                   Renamed HasOpenPosition() -> CountOpenPositions()
+                   (returns int) since TradeLock needs a count, not
+                   just a bool.
+
+HOW TO TEST THIS BATCH
+--------------------------
+1. Compile EA.mq5 (F7) - should still be 0 errors, 0 warnings.
+2. Compile and run all 4 new test scripts (Test_ExecutionFilter,
+   Test_TradeLock, Test_EmergencyStop, Test_RiskManager). Every line
+   in the Experts tab should say [PASS].
+3. Attach the EA to a chart ON A DEMO ACCOUNT. Watch the Experts tab -
+   you should see the same Pattern/Classifier/Decision lines as before,
+   and now, when a decision clears the RiskManager checks, a
+   "Trade OPENED | dir=... lot=... sl=... tp=..." line, followed by a
+   real position appearing in the Trade tab.
+4. Manually close that demo position and confirm the next new bar logs
+   "state is COOLDOWN" for InpCooldownBars bars before evaluating
+   signals again.
+
+WHAT'S NEXT (Phase 1, batch 6 - final)
+------------------------------------------
+- Tests/Test_EndToEndPatternPipeline.mq5 (the acceptance/integration
+  test agreed on earlier: feeds a full OHLC fixture through
+  MarketData -> PatternDetector -> PatternClassifier -> DecisionEngine
+  and checks the final decision, stopping before TradeManager.Execute())
+- A final pass over all Batch 1-5 README notes to confirm nothing was
+  left as a dangling TODO before calling Phase 1 "done".
