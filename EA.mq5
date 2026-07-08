@@ -9,21 +9,23 @@
 //| the execution flow agreed for this EA:                            |
 //|                                                                    |
 //|   OnTick()                                                        |
-//|     |-- EmergencyStop check            (every tick)               |
-//|     |-- StateMachine.Sync()            (every tick)               |
-//|     |-- ManageOpenPositions()          (every tick)               |
+//|     |-- EmergencyStop check            (every tick)  [TODO]      |
+//|     |-- StateMachine.Sync()            (every tick)  [DONE]      |
+//|     |-- ManageOpenPositions()          (every tick)  [TODO]      |
 //|     '-- if IsNewBar():                                            |
-//|          1. TradeLock.Blocked check                               |
-//|          2. State == COOLDOWN check                               |
-//|          3. ExecutionFilter.TickCheck()   (cheap, no history)     |
-//|          4. MarketData.Update()                                   |
-//|          5. ExecutionFilter.MarketCheck() (needs ATR/history)     |
-//|          6. PatternDetector.Scan()                                |
-//|          7. PatternClassifier.Score()                             |
-//|          8. DecisionEngine.Decide()                                |
-//|          9. RiskManager.Validate()                                |
-//|         10. TradeManager.Execute()                                |
-//|         11. StateMachine.Transition()                             |
+//|          1. TradeLock.Blocked check              [TODO]          |
+//|          2. StateMachine.Transition() +                          |
+//|             State == COOLDOWN check              [DONE]          |
+//|          3. ExecutionFilter.TickCheck()           [TODO]          |
+//|          4. MarketData.Update()                   [DONE]          |
+//|          5. ExecutionFilter.MarketCheck()         [TODO]          |
+//|          6. PatternDetector.Scan()                [DONE]          |
+//|          7. PatternClassifier.Score()              [DONE]          |
+//|          8. DecisionEngine.Decide()                [DONE]          |
+//|          9. RiskManager.Validate()                 [TODO]          |
+//|         10. TradeManager.Execute()                 [TODO]          |
+//|         11. StateMachine transitions to IN_TRADE via Sync()       |
+//|             on the tick after TradeManager opens a position       |
 //+------------------------------------------------------------------+
 #property copyright "Phase 1"
 #property version   "1.00"
@@ -37,12 +39,41 @@
 #include "Data/MarketData.mqh"
 #include "Pattern/PatternDetector.mqh"
 #include "Classification/PatternClassifier.mqh"
+#include "Strategy/StateMachine.mqh"
+#include "Strategy/DecisionEngine.mqh"
 
 CLogger            g_logger("PatternEA");
 CMarketData        g_marketData(_Symbol, _Period, InpATRPeriod);
 CPatternDetector   g_detector;
 CPatternClassifier g_classifier;
+CStateMachine      g_stateMachine;
+CDecisionEngine    g_decisionEngine;
 datetime           g_lastBarTime = 0;
+
+//+------------------------------------------------------------------+
+//| Checks the broker/terminal for a live position belonging to this   |
+//| EA on this symbol. Lives here (not inside StateMachine) so         |
+//| StateMachine itself never touches the broker API directly - see    |
+//| the comment at the top of Strategy/StateMachine.mqh.               |
+//+------------------------------------------------------------------+
+bool HasOpenPosition()
+{
+   int total = PositionsTotal();
+   for(int i = 0; i < total; i++)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0)
+         continue;
+
+      if(!PositionSelectByTicket(ticket))
+         continue;
+
+      if(PositionGetString(POSITION_SYMBOL) == _Symbol &&
+         (long)PositionGetInteger(POSITION_MAGIC) == GetMagicNumber())
+         return true;
+   }
+   return false;
+}
 
 //+------------------------------------------------------------------+
 //| Returns true exactly once per new closed bar.                     |
@@ -95,8 +126,8 @@ void OnTick()
    //   }
 
    //--- Tick-level position management (every tick, not gated by new bar) ---
-   // TODO (Strategy/StateMachine.mqh): stateMachine.Sync();
-   // TODO (Trade/TradeManager.mqh):    tradeManager.ManageOpenPositions();
+   g_stateMachine.Sync(HasOpenPosition());
+   // TODO (Trade/TradeManager.mqh): tradeManager.ManageOpenPositions();
 
    if(!IsNewBar())
       return;
@@ -104,8 +135,15 @@ void OnTick()
    g_logger.Debug("New bar: " + TimeToString(TimeCurrent(), TIME_DATE | TIME_MINUTES));
 
    //--- 1-2. State / lock guards ---
-   // TODO (Risk/TradeLock.mqh):      if(tradeLock.Blocked()) return;
-   // TODO (Strategy/StateMachine):   if(stateMachine.CurrentState() == STATE_COOLDOWN) return;
+   // TODO (Risk/TradeLock.mqh): if(tradeLock.Blocked()) return;
+
+   g_stateMachine.Transition(); // counts down COOLDOWN, releases to FLAT if elapsed
+
+   if(g_stateMachine.CurrentState() == STATE_COOLDOWN)
+   {
+      g_logger.Debug("Skipping bar: state is COOLDOWN");
+      return;
+   }
 
    //--- 3. Cheap tick-level checks before touching price history ---
    // TODO (Risk/ExecutionFilter.mqh): if(!executionFilter.TickCheck()) return;
@@ -150,10 +188,16 @@ void OnTick()
    g_logger.Debug(StringFormat("Classifier scores | bull=%.2f bear=%.2f neutral=%.2f",
                                 bullishScore, bearishScore, neutralScore));
 
-   //--- 8-11. Decision -> Risk -> Trade -> State (next batches) ---
-   // TODO (Strategy/DecisionEngine.mqh):            direction = decisionEngine.Decide(bull, bear, neutral);
-   // TODO (Risk/RiskManager.mqh):                   riskManager.Validate(direction, stateMachine.CurrentState());
-   // TODO (Trade/TradeManager.mqh):                 tradeManager.Execute(direction, lot, sl, tp);
-   // TODO (Strategy/StateMachine.mqh):              stateMachine.Transition();
+   //--- 8. Decision (now real) ---
+   TradeDirection direction = g_decisionEngine.Decide(bullishScore, bearishScore, neutralScore);
+   g_logger.Debug("Decision: " + EnumToString(direction) +
+                   " | SystemState=" + EnumToString(g_stateMachine.CurrentState()));
+
+   //--- 9-11. Risk -> Trade -> State-on-open (Batch 5) ---
+   // TODO (Risk/RiskManager.mqh):     riskManager.Validate(direction, g_stateMachine.CurrentState());
+   // TODO (Trade/TradeManager.mqh):   tradeManager.Execute(direction, lot, sl, tp);
+   // Note: no explicit "StateMachine.Transition() on open" call is needed here -
+   // g_stateMachine.Sync() (top of OnTick, every tick) will pick up the new
+   // position on the very next tick and move FLAT/RECOVERY -> IN_TRADE itself.
 }
 //+------------------------------------------------------------------+

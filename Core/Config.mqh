@@ -29,6 +29,10 @@ input group "=== Trade Lock ==="
 input bool InpOneTradePerBar   = true; // Prevent opening more than one trade per bar
 input int  InpMaxOpenPositions = 1;    // Max concurrent open positions for this EA/symbol
 
+input group "=== Decision Engine ==="
+input double InpMinScoreThreshold = 1.0; // A direction's score must reach at least this to ever qualify
+input double InpDominanceRatio    = 1.2; // A direction must beat the opposite score by this ratio to win (avoids close calls)
+
 input group "=== Emergency ==="
 input bool InpEnableEmergencyStop = true; // Master kill-switch check, evaluated every tick
 

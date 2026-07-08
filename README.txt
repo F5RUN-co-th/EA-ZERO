@@ -182,3 +182,74 @@ WHAT'S NEXT (Phase 1, batch 4)
 - Strategy/StateMachine.mqh (FLAT/IN_TRADE/COOLDOWN/RECOVERY)
 - This is the point where the EA can theoretically decide something -
   still without opening real trades until Risk/Trade land in Batch 5.
+
+
+PHASE 1 - BATCH 4 (DecisionEngine + StateMachine)
+=====================================================
+
+NEW FILES
+-----------
+Strategy/StateMachine.mqh   <- FLAT/IN_TRADE/COOLDOWN/RECOVERY. Sync(bool
+                               hasPosition) takes the position status as a
+                               parameter instead of querying the broker
+                               itself - EA.mq5 checks the broker (via a
+                               small HasOpenPosition() helper) and passes
+                               the result in. This makes the state machine
+                               100% pure/testable with plain booleans.
+Strategy/DecisionEngine.mqh <- Converts bull/bear/neutral scores into a
+                               TradeDirection. A direction only wins if it
+                               clears InpMinScoreThreshold AND beats the
+                               opposite side by InpDominanceRatio - this
+                               rejects both weak signals and near-ties.
+Tests/Test_StateMachine.mq5   <- drives Sync()/Transition() with plain
+                               true/false values, no broker needed
+Tests/Test_DecisionEngine.mq5 <- checks BUY/SELL/NONE against the default
+                               InpMinScoreThreshold/InpDominanceRatio
+
+CHANGED FILES
+---------------
+EA.mq5  <- Added HasOpenPosition() helper (checks PositionsTotal/
+           PositionGetTicket filtered by symbol+magic). Wired
+           g_stateMachine.Sync(HasOpenPosition()) every tick,
+           g_stateMachine.Transition() + COOLDOWN check at the top of the
+           new-bar block, and g_decisionEngine.Decide() at step 8. Still
+           no trade is opened - Decision is logged, not executed.
+
+CAUGHT DURING THIS BATCH (worth knowing about)
+--------------------------------------------------
+Early in this batch, two input groups ("State Machine" with
+InpMaxConsecutiveLosses, and a second "Decision Engine" group with
+InpMinScoreThreshold/InpMinScoreEdge) were drafted assuming a different
+StateMachine design than what actually existed in the project - which
+would have DUPLICATE-DECLARED InpMinScoreThreshold and produced a
+compile error. Caught and removed before packaging. If you ever see a
+"variable already defined" error after pulling a batch, that class of
+mistake - two different input groups declaring the same name - is the
+first thing to check.
+
+DESIGN NOTE: RECOVERY is not yet auto-triggered
+----------------------------------------------------
+StateMachine exposes EnterRecovery()/ExitRecovery(), but nothing calls
+them yet - there's no real trade-result history to base a "consecutive
+losses" decision on until Trade/TradeManager.mqh exists. Batch 5's
+RiskManager will call these once it has genuine win/loss data from
+TradeManager, rather than StateMachine reaching into deal history itself
+(keeps state-tracking and P&L-computation as separate responsibilities).
+
+HOW TO TEST THIS BATCH
+--------------------------
+1. Compile EA.mq5 (F7) - should still be 0 errors, 0 warnings.
+2. Compile and run Tests/Test_StateMachine.mq5 and
+   Tests/Test_DecisionEngine.mq5 as Scripts. Every line in the Experts
+   tab should say [PASS].
+3. Attach the EA to a chart - on each new bar you should now see a
+   "Decision: DIRECTION_... | SystemState=..." line after the classifier
+   scores line. Still no trades open (that's Batch 5).
+
+WHAT'S NEXT (Phase 1, batch 5)
+---------------------------------
+- Risk/RiskManager.mqh, Risk/ExecutionFilter.mqh, Risk/TradeLock.mqh,
+  Risk/EmergencyStop.mqh
+- Trade/TradeManager.mqh (implements ITradeExecutor)
+- This is the batch where the EA opens its first real trade - test on a
+  demo account only.
